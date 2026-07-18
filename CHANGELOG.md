@@ -7,6 +7,8 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-19
+
 ### Added
 
 - Native macOS Markdown preview windows
@@ -15,4 +17,5 @@ and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Responsive default sizing and staggered multi-window positioning
 - Local rendering with App Sandbox file access
 
-[Unreleased]: https://github.com/David-Dia/MDown-View/commits/main
+[Unreleased]: https://github.com/David-Dia/MDown-View/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/David-Dia/MDown-View/releases/tag/v1.0.0

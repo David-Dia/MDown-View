@@ -22,9 +22,19 @@ document in a focused preview window and keeps rendering local to your Mac.
 ## Requirements
 
 - macOS 14.6 or later
-- Xcode 16 or later
+
+## Install
+
+1. Download the latest DMG from [GitHub Releases](https://github.com/David-Dia/MDown-View/releases).
+2. Open the DMG and drag **MDown View** to **Applications**.
+3. Open the app from the Applications folder.
+
+The downloadable build is not notarized. If macOS blocks the first launch,
+open **System Settings → Privacy & Security** and click **Open Anyway**.
 
 ## Build from Source
+
+Building from source requires Xcode 16 or later.
 
 1. Clone the repository:
 
