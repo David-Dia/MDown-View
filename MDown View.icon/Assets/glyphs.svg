@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="ink" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#253246"/>
+      <stop offset="1" stop-color="#111A29"/>
+    </linearGradient>
+    <linearGradient id="softInk" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4E5E73"/>
+      <stop offset="1" stop-color="#28364B"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(-61.44 0) scale(1.12 1)">
+    <path
+      d="M350 555V354H382L445 532L508 354H540V555"
+      fill="none"
+      stroke="url(#ink)"
+      stroke-width="58"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path d="M336 655H554" fill="none" stroke="url(#softInk)" stroke-width="26" stroke-linecap="round"/>
+    <path d="M336 716H475" fill="none" stroke="url(#softInk)" stroke-width="26" stroke-linecap="round"/>
+    <path d="M628 730L594 767L628 804" fill="none" stroke="url(#softInk)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M662 730L696 767L662 804" fill="none" stroke="url(#softInk)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

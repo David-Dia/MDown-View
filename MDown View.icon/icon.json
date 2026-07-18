@@ -1,0 +1,78 @@
+{
+  "fill" : {
+    "solid" : "extended-srgb:0.16078,0.20784,0.28627,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "glyphs.svg",
+          "name" : "Markdown Glyphs",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              5.791797856750236,
+              -17.304735152062904
+            ]
+          }
+        },
+        {
+          "fill" : "automatic",
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "fold.svg",
+          "name" : "Page Fold",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              4.770977259149959,
+              1.615218530609127
+            ]
+          }
+        },
+        {
+          "image-name" : "paper.svg",
+          "name" : "Paper",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              6.599490164442614,
+              1.502957155629474
+            ]
+          }
+        },
+        {
+          "glass" : false,
+          "hidden" : false,
+          "image-name" : "background.svg",
+          "name" : "Navy Background",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 1.02,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "name" : "MDown View",
+      "shadow" : {
+        "kind" : "none",
+        "opacity" : 0.5
+      },
+      "specular" : false,
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

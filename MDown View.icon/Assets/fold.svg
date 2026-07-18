@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="fold" x1="0.16" y1="0.04" x2="0.85" y2="0.92">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.66" stop-color="#F8FAFD"/>
+      <stop offset="1" stop-color="#E1E7F0"/>
+    </linearGradient>
+    <linearGradient id="foldEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#A8B3C4"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(-61.44 0) scale(1.12 1)">
+    <path
+      d="M596 238C596 286 625 316 672 316H718C753 316 778 328 802 354"
+      fill="none"
+      stroke="#718096"
+      stroke-opacity="0.13"
+      stroke-width="7"
+      stroke-linecap="round"
+    />
+    <path
+      d="M590 142C608 143 623 150 640 167L781 308C794 321 800 336 802 354C775 325 752 314 718 314H672C625 314 596 286 596 239V172C596 158 594 149 590 142Z"
+      fill="url(#fold)"
+      stroke="url(#foldEdge)"
+      stroke-width="3"
+      stroke-linejoin="round"
+    />
+  </g>
+</svg>
