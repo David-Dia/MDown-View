@@ -17,7 +17,7 @@ struct PreviewContentView: View {
 
     private var resolvedAppearance: MarkdownAppearance {
         switch theme.mode {
-        case .automatic:
+        case .system:
             systemColorScheme == .dark ? .dark : .light
         case .light:
             .light

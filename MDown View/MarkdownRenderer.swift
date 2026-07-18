@@ -41,9 +41,9 @@ nonisolated enum MarkdownDocumentRenderer {
               element.textContent = "";
               element.classList.add("mermaid-error");
               const title = document.createElement("strong");
-              title.textContent = "Mermaid 图表渲染失败";
+              title.textContent = "Unable to render Mermaid diagram";
               const detail = document.createElement("span");
-              detail.textContent = "请检查图表语法。";
+              detail.textContent = "Check the diagram syntax and try again.";
               element.append(title, detail);
             }
 
@@ -99,7 +99,7 @@ nonisolated enum MarkdownDocumentRenderer {
 
         return """
         <!doctype html>
-        <html lang="zh-CN" data-theme="\(appearance.rawValue)">
+        <html lang="en" data-theme="\(appearance.rawValue)">
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">

@@ -143,8 +143,8 @@ struct MarkdownWebView: NSViewRepresentable {
                     html = MarkdownDocumentRenderer.render(markdown, appearance: appearance)
                 } else {
                     html = MarkdownDocumentRenderer.renderError(
-                        title: "无法打开文件",
-                        message: readError ?? "文件读取失败。",
+                        title: "Unable to Open File",
+                        message: readError ?? "The file could not be read.",
                         appearance: appearance
                     )
                 }

@@ -45,8 +45,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openDocument(_ sender: Any?) {
         let panel = NSOpenPanel()
-        panel.title = "打开 Markdown 文件"
-        panel.prompt = "打开"
+        panel.title = "Open Markdown Files"
+        panel.prompt = "Open"
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = true
@@ -80,7 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(
-            withTitle: "退出 MDown View",
+            withTitle: "Quit MDown View",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
@@ -88,15 +88,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(appItem)
 
         let fileItem = NSMenuItem()
-        let fileMenu = NSMenu(title: "文件")
+        let fileMenu = NSMenu(title: "File")
         let openItem = fileMenu.addItem(
-            withTitle: "打开…",
+            withTitle: "Open…",
             action: #selector(openDocument(_:)),
             keyEquivalent: "o"
         )
         openItem.target = self
         let closeItem = fileMenu.addItem(
-            withTitle: "关闭窗口",
+            withTitle: "Close Window",
             action: #selector(closeWindow(_:)),
             keyEquivalent: "w"
         )
@@ -105,9 +105,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(fileItem)
 
         let editItem = NSMenuItem()
-        let editMenu = NSMenu(title: "编辑")
-        editMenu.addItem(withTitle: "拷贝", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        editMenu.addItem(withTitle: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = editMenu
         mainMenu.addItem(editItem)
 
@@ -262,8 +262,8 @@ private final class PreviewWindowController: NSWindowController, NSWindowDelegat
 
         let accessory = NSTitlebarAccessoryViewController()
         accessory.layoutAttribute = .right
-        let themeView = NSHostingView(rootView: ThemeMenuView())
-        themeView.frame = NSRect(x: 0, y: 0, width: 132, height: 30)
+        let themeView = NSHostingView(rootView: ThemePickerView())
+        themeView.frame = NSRect(x: 0, y: 0, width: 174, height: 30)
         accessory.view = themeView
         window.addTitlebarAccessoryViewController(accessory)
         window.setContentSize(contentSize)
@@ -298,43 +298,45 @@ private final class PreviewWindowController: NSWindowController, NSWindowDelegat
     }
 }
 
-private struct ThemeMenuView: View {
+private struct ThemePickerView: View {
     @ObservedObject private var theme = ThemeManager.shared
 
     var body: some View {
-        Menu {
-            Section("主题") {
-                ForEach(ThemeMode.allCases) { mode in
-                    Button {
-                        theme.mode = mode
-                    } label: {
-                        Label(mode.title, systemImage: mode == theme.mode ? "checkmark" : mode.symbolName)
-                    }
+        HStack(spacing: 2) {
+            ForEach(ThemeMode.allCases) { mode in
+                Button {
+                    theme.mode = mode
+                } label: {
+                    Text(mode.title)
+                        .font(.system(size: 11.5, weight: mode == theme.mode ? .semibold : .medium))
+                        .foregroundStyle(mode == theme.mode ? .primary : .secondary)
+                        .frame(minWidth: mode == .system ? 54 : 42)
+                        .frame(height: 22)
+                        .background {
+                            if mode == theme.mode {
+                                Capsule()
+                                    .fill(Color.primary.opacity(0.12))
+                            }
+                        }
+                        .contentShape(Capsule())
                 }
+                .buttonStyle(.plain)
+                .help("Use \(mode.title.lowercased()) appearance")
+                .accessibilityLabel("\(mode.title) appearance")
+                .accessibilityValue(mode == theme.mode ? "Selected" : "Not selected")
             }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: theme.mode.symbolName)
-                Text("调整外观")
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-                .font(.system(size: 12.5, weight: .medium))
-                .lineLimit(1)
-                .padding(.horizontal, 11)
-                .frame(height: 26)
-                .background(Color.primary.opacity(0.07), in: Capsule())
-                .overlay {
-                    Capsule()
-                        .stroke(Color.primary.opacity(0.22), lineWidth: 0.75)
-                }
-                .contentShape(Capsule())
         }
-        .menuStyle(.borderlessButton)
+        .padding(2)
+        .background(Color.primary.opacity(0.055), in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(Color.primary.opacity(0.18), lineWidth: 0.75)
+        }
+        .contentShape(Capsule())
         .fixedSize()
         .padding(.horizontal, 4)
-        .help("调整预览外观")
-        .accessibilityLabel("调整外观，当前为\(theme.mode.title)")
+        .preferredColorScheme(theme.mode.colorScheme)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Appearance")
     }
 }

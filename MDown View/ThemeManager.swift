@@ -3,7 +3,7 @@ import Combine
 import SwiftUI
 
 enum ThemeMode: String, CaseIterable, Identifiable {
-    case automatic
+    case system
     case light
     case dark
 
@@ -11,23 +11,15 @@ enum ThemeMode: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .automatic: "自动"
-        case .light: "浅色"
-        case .dark: "深色"
-        }
-    }
-
-    var symbolName: String {
-        switch self {
-        case .automatic: "circle.lefthalf.filled"
-        case .light: "sun.max"
-        case .dark: "moon"
+        case .system: "System"
+        case .light: "Light"
+        case .dark: "Dark"
         }
     }
 
     var colorScheme: ColorScheme? {
         switch self {
-        case .automatic: nil
+        case .system: nil
         case .light: .light
         case .dark: .dark
         }
@@ -48,6 +40,6 @@ final class ThemeManager: ObservableObject {
 
     private init() {
         let savedValue = UserDefaults.standard.string(forKey: Self.defaultsKey)
-        mode = ThemeMode(rawValue: savedValue ?? "") ?? .automatic
+        mode = ThemeMode(rawValue: savedValue ?? "") ?? .system
     }
 }
