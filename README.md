@@ -12,10 +12,14 @@ document in a focused preview window and keeps rendering local to your Mac.
 ## Features
 
 - Native AppKit and SwiftUI interface
-- Markdown headings, lists, links, block quotes, tables, task lists, and fenced code
+- Markdown headings, lists, links, images, block quotes, tables, task lists, and fenced code
+- In-page anchor navigation for document headings
 - Local Mermaid diagram rendering
 - System, Light, and Dark appearance modes
-- Responsive preview windows with staggered positioning for multiple documents
+- Standard Edit, View, and Window menus with zoom controls
+- Windows remember size and position, with staggered placement for multiple documents
+- Wide tables wrap to fit the window
+- Broad text-encoding support (UTF-8, UTF-16, GB18030, Latin-1)
 - Finder **Open With** support for `.md` and `.markdown` files
 - No accounts, analytics, telemetry, or remote Markdown rendering
 
@@ -74,10 +78,11 @@ documents remain visible.
 Markdown rendering happens locally. MDown View does not include analytics,
 tracking, accounts, or application-level network requests.
 
-The app uses the macOS App Sandbox with read-only access to files selected by
-the user. The preview page uses a restrictive Content Security Policy and does
-not load remote Markdown assets. Outgoing network access is enabled only for
-WebKit process compatibility.
+The app uses the macOS App Sandbox with read-only access to the files you
+select. The preview page enforces a restrictive Content Security Policy:
+scripts come only from the bundled Mermaid library, and remote images may load
+only over `https`. Network access exists solely for WebKit — never for
+analytics or tracking.
 
 See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 

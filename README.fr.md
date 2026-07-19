@@ -11,10 +11,14 @@ MDown View est une visionneuse Markdown légère et native pour macOS. Chaque do
 ## Fonctionnalités
 
 - Interface native basée sur AppKit et SwiftUI
-- Prise en charge des titres, listes, liens, citations, tableaux, listes de tâches et blocs de code Markdown
+- Prise en charge des titres, listes, liens, images, citations, tableaux, listes de tâches et blocs de code Markdown
+- Navigation par ancres internes vers les titres
 - Rendu local des diagrammes Mermaid
 - Modes d’apparence Système, Clair et Sombre
-- Fenêtres adaptées à la taille de l’écran et décalées pour distinguer plusieurs documents
+- Menus Édition, Affichage et Fenêtre standard, avec commandes de zoom
+- Les fenêtres mémorisent leur taille et leur position, et sont décalées pour distinguer plusieurs documents
+- Les tableaux larges s’adaptent à la largeur de la fenêtre
+- Prise en charge étendue des encodages de texte (UTF-8, UTF-16, GB18030, Latin-1)
 - Prise en charge de **Ouvrir avec** dans le Finder pour les fichiers `.md` et `.markdown`
 - Aucun compte, outil d’analyse, télémétrie ou rendu Markdown distant
 
@@ -71,7 +75,7 @@ Chaque fichier s’ouvre dans sa propre fenêtre. Les nouvelles fenêtres sont l
 
 Le rendu Markdown est effectué localement. MDown View n’intègre aucun outil d’analyse, suivi, compte ou requête réseau au niveau de l’application.
 
-L’application utilise l’App Sandbox de macOS et accède en lecture seule aux fichiers sélectionnés par l’utilisateur. La page d’aperçu applique une Content Security Policy restrictive et ne charge aucune ressource Markdown distante. L’accès réseau sortant est activé uniquement pour assurer la compatibilité avec le processus WebKit.
+L’application utilise l’App Sandbox de macOS et accède en lecture seule aux fichiers que vous sélectionnez. La page d’aperçu applique une Content Security Policy restrictive : les scripts proviennent uniquement de la bibliothèque Mermaid intégrée et les images distantes ne peuvent être chargées qu’en `https`. L’accès réseau n’existe que pour WebKit, jamais pour l’analyse ou le suivi.
 
 Consultez [SECURITY.md](SECURITY.md) pour signaler une vulnérabilité.
 

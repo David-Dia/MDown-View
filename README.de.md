@@ -11,10 +11,14 @@ MDown View ist ein schlanker, nativer Markdown-Betrachter für macOS. Jedes Doku
 ## Funktionen
 
 - Native Benutzeroberfläche mit AppKit und SwiftUI
-- Unterstützung für Markdown-Überschriften, Listen, Links, Zitate, Tabellen, Aufgabenlisten und Codeblöcke
+- Unterstützung für Markdown-Überschriften, Listen, Links, Bilder, Zitate, Tabellen, Aufgabenlisten und Codeblöcke
+- Seiteninterne Ankernavigation zu Überschriften
 - Lokales Rendern von Mermaid-Diagrammen
 - Darstellungsmodi „System“, „Hell“ und „Dunkel“
-- An die Bildschirmgröße angepasste Fenster und versetzte Positionierung mehrerer Dokumente
+- Standardmenüs „Bearbeiten“, „Darstellung“ und „Fenster“ mit Zoomsteuerung
+- Fenster merken sich Größe und Position und werden für mehrere Dokumente versetzt angeordnet
+- Breite Tabellen passen sich an die Fensterbreite an
+- Breite Unterstützung für Textkodierungen (UTF-8, UTF-16, GB18030, Latin-1)
 - Finder-Unterstützung für **Öffnen mit** bei `.md`- und `.markdown`-Dateien
 - Keine Konten, Analysen, Telemetrie oder externes Markdown-Rendering
 
@@ -71,7 +75,7 @@ Jede Datei wird in einem eigenen Fenster geöffnet. Neue Fenster werden leicht v
 
 Markdown wird lokal gerendert. MDown View enthält keine Analysen, Nachverfolgung, Konten oder Netzwerkanfragen auf Anwendungsebene.
 
-Die App verwendet die macOS App Sandbox und greift ausschließlich lesend auf die vom Benutzer ausgewählten Dateien zu. Die Vorschauseite nutzt eine restriktive Content Security Policy und lädt keine externen Markdown-Ressourcen. Ausgehender Netzwerkzugriff ist nur zur Kompatibilität mit dem WebKit-Prozess aktiviert.
+Die App verwendet die macOS App Sandbox und greift ausschließlich lesend auf die von dir ausgewählten Dateien zu. Die Vorschauseite nutzt eine restriktive Content Security Policy: Skripte stammen nur aus der mitgelieferten Mermaid-Bibliothek und entfernte Bilder können ausschließlich über `https` geladen werden. Netzwerkzugriff besteht nur für WebKit – niemals für Analysen oder Nachverfolgung.
 
 Informationen zum Melden von Sicherheitslücken findest du in [SECURITY.md](SECURITY.md).
 

@@ -11,10 +11,14 @@ MDown View es un visor de Markdown nativo y ligero para macOS. Abre cada documen
 ## Características
 
 - Interfaz nativa creada con AppKit y SwiftUI
-- Compatibilidad con títulos, listas, enlaces, citas, tablas, listas de tareas y bloques de código de Markdown
+- Compatibilidad con títulos, listas, enlaces, imágenes, citas, tablas, listas de tareas y bloques de código de Markdown
+- Navegación mediante anclas internas hacia los encabezados
 - Renderizado local de diagramas Mermaid
 - Modos de apariencia del sistema, claro y oscuro
-- Ventanas adaptadas al tamaño de la pantalla y desplazadas para distinguir varios documentos
+- Menús estándar de Edición, Visualización y Ventana, con controles de zoom
+- Las ventanas recuerdan su tamaño y posición, y se desplazan para distinguir varios documentos
+- Las tablas anchas se ajustan al ancho de la ventana
+- Amplia compatibilidad de codificaciones de texto (UTF-8, UTF-16, GB18030, Latin-1)
 - Compatibilidad con **Abrir con** de Finder para archivos `.md` y `.markdown`
 - Sin cuentas, análisis, telemetría ni renderizado remoto de Markdown
 
@@ -71,7 +75,7 @@ Cada archivo se abre en su propia ventana. Las ventanas nuevas aparecen ligerame
 
 El renderizado de Markdown se realiza localmente. MDown View no incluye análisis, seguimiento, cuentas ni solicitudes de red a nivel de aplicación.
 
-La aplicación utiliza App Sandbox de macOS y solo accede en modo de lectura a los archivos seleccionados por el usuario. La página de previsualización aplica una Content Security Policy restrictiva y no carga recursos Markdown remotos. El acceso de red saliente solo está habilitado para la compatibilidad con el proceso de WebKit.
+La aplicación utiliza App Sandbox de macOS y solo accede en modo de lectura a los archivos que seleccionas. La página de previsualización aplica una Content Security Policy restrictiva: los scripts provienen únicamente de la biblioteca Mermaid incluida y las imágenes remotas solo pueden cargarse mediante `https`. El acceso a la red existe solo para WebKit, nunca para análisis ni seguimiento.
 
 Consulta [SECURITY.md](SECURITY.md) para informar de vulnerabilidades.
 
