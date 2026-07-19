@@ -28,7 +28,7 @@ nonisolated enum MarkdownDocumentRenderer {
     private static func document(
         body: String,
         appearance: MarkdownAppearance,
-        includesMermaid: Bool = true
+        includesMermaid: Bool
     ) -> String {
         let isDark = appearance == .dark
         let mermaidTheme = isDark ? "dark" : "neutral"
@@ -104,7 +104,7 @@ nonisolated enum MarkdownDocumentRenderer {
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <meta http-equiv="Content-Security-Policy"
-                content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src 'self' data:">
+                content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; font-src 'self' data:">
           <style>
             :root {
               color-scheme: light;
@@ -170,6 +170,7 @@ nonisolated enum MarkdownDocumentRenderer {
             del { color: var(--muted); }
             a { color: var(--link); text-decoration: none; }
             a:hover { text-decoration: underline; }
+            img { display: block; height: auto; max-width: 100%; }
             hr { height: 1px; border: 0; background: var(--line); margin: 2.2em 0; }
             blockquote {
               color: var(--muted);
@@ -213,7 +214,7 @@ nonisolated enum MarkdownDocumentRenderer {
             }
             pre code { font-size: inherit; background: transparent; padding: 0; }
             .table-scroll { margin: 1.3em 0; overflow-x: auto; }
-            table { border-collapse: collapse; min-width: 100%; width: max-content; }
+            table { border-collapse: collapse; width: 100%; table-layout: auto; }
             th, td {
               border: 1px solid var(--line);
               padding: 8px 12px;
@@ -286,7 +287,10 @@ nonisolated private final class MarkdownParser {
 
     private let lines: [String]
     private let nestingDepth: Int
+    private let escapedPipePlaceholder = "\u{E002}\(UUID().uuidString)\u{E003}"
+    private let hardBreakMarker = "\u{E004}\(UUID().uuidString)\u{E005}"
     private var index = 0
+    private var usedSlugs: [String: Int] = [:]
 
     init(markdown: String, nestingDepth: Int = 0) {
         self.nestingDepth = nestingDepth
@@ -379,18 +383,18 @@ nonisolated private final class MarkdownParser {
         if let match = line.firstMatch(pattern: #"^\s*(#{1,6})\s+(.+?)\s*#*\s*$"#) {
             let level = match[1].count
             index += 1
-            return "<h\(level)>\(InlineMarkdown.render(match[2]))</h\(level)>"
+            return "<h\(level) id=\"\(slug(for: match[2]))\">\(InlineMarkdown.render(match[2]))</h\(level)>"
         }
 
         guard index + 1 < lines.count else { return nil }
         let underline = lines[index + 1].trimmingCharacters(in: .whitespaces)
         if underline.range(of: #"^=+\s*$"#, options: .regularExpression) != nil {
             index += 2
-            return "<h1>\(InlineMarkdown.render(line))</h1>"
+            return "<h1 id=\"\(slug(for: line))\">\(InlineMarkdown.render(line))</h1>"
         }
         if underline.range(of: #"^-+\s*$"#, options: .regularExpression) != nil {
             index += 2
-            return "<h2>\(InlineMarkdown.render(line))</h2>"
+            return "<h2 id=\"\(slug(for: line))\">\(InlineMarkdown.render(line))</h2>"
         }
         return nil
     }
@@ -513,7 +517,16 @@ nonisolated private final class MarkdownParser {
             while index < lines.count {
                 let next = lines[index]
                 if next.trimmingCharacters(in: .whitespaces).isEmpty { break }
-                if listItem(next) != nil || isBlockStart(at: index) { break }
+                if listItem(next) != nil { break }
+                if let fenced = fencedCode() {
+                    if !continuation.isEmpty {
+                        html += " " + InlineMarkdown.render(continuation.joined(separator: " "))
+                        continuation = []
+                    }
+                    html += fenced
+                    continue
+                }
+                if isBlockStart(at: index) { break }
                 continuation.append(next.trimmingCharacters(in: .whitespaces))
                 index += 1
             }
@@ -533,10 +546,15 @@ nonisolated private final class MarkdownParser {
             let line = lines[index]
             if line.trimmingCharacters(in: .whitespaces).isEmpty { break }
             if !paragraphLines.isEmpty && isBlockStart(at: index) { break }
-            paragraphLines.append(line.trimmingCharacters(in: .whitespaces))
+            var content = line
+            let hasHardBreak = content.hasSuffix("  ") || content.hasSuffix("\\")
+            if content.hasSuffix("\\") { content.removeLast() }
+            let trimmed = content.trimmingCharacters(in: .whitespaces)
+            paragraphLines.append(hasHardBreak ? trimmed + hardBreakMarker : trimmed)
             index += 1
         }
-        return "<p>\(InlineMarkdown.render(paragraphLines.joined(separator: " ")))</p>"
+        let rendered = InlineMarkdown.render(paragraphLines.joined(separator: " "))
+        return "<p>\(rendered.replacingOccurrences(of: hardBreakMarker, with: "<br>"))</p>"
     }
 
     private func isBlockStart(at position: Int) -> Bool {
@@ -552,6 +570,28 @@ nonisolated private final class MarkdownParser {
             || isTable(at: position)
     }
 
+    private func slug(for headingText: String) -> String {
+        let stripped = headingText.replacingOccurrences(
+            of: #"[*_`~]"#,
+            with: "",
+            options: .regularExpression
+        )
+        let lowered = stripped.lowercased()
+        var slug = ""
+        for scalar in lowered.unicodeScalars {
+            if CharacterSet.whitespaces.contains(scalar) {
+                slug.append("-")
+            } else if CharacterSet.alphanumerics.contains(scalar) || scalar == "-" || scalar == "_" {
+                slug.unicodeScalars.append(scalar)
+            }
+        }
+        if slug.isEmpty { slug = "section" }
+
+        let count = usedSlugs[slug, default: 0]
+        usedSlugs[slug] = count + 1
+        return count == 0 ? slug : "\(slug)-\(count)"
+    }
+
     private func isHorizontalRule(_ line: String) -> Bool {
         line.range(
             of: #"^\s{0,3}((\*\s*){3,}|(-\s*){3,}|(_\s*){3,})$"#,
@@ -564,16 +604,19 @@ nonisolated private final class MarkdownParser {
         let delimiters = tableCells(lines[position + 1])
         return !delimiters.isEmpty && delimiters.allSatisfy {
             $0.trimmingCharacters(in: .whitespaces)
-                .range(of: #"^:?-{3,}:?$"#, options: .regularExpression) != nil
+                .range(of: #"^:?-+:?$"#, options: .regularExpression) != nil
         }
     }
 
     private func tableCells(_ line: String) -> [String] {
-        var value = line.trimmingCharacters(in: .whitespaces)
+        var value = line.replacingOccurrences(of: "\\|", with: escapedPipePlaceholder)
+        value = value.trimmingCharacters(in: .whitespaces)
         if value.hasPrefix("|") { value.removeFirst() }
         if value.hasSuffix("|") { value.removeLast() }
         return value.split(separator: "|", omittingEmptySubsequences: false).map {
-            String($0).trimmingCharacters(in: .whitespaces)
+            String($0)
+                .trimmingCharacters(in: .whitespaces)
+                .replacingOccurrences(of: escapedPipePlaceholder, with: "\\|")
         }
     }
 
@@ -600,28 +643,50 @@ nonisolated private final class MarkdownParser {
 }
 
 nonisolated private enum InlineMarkdown {
-    private static let tokenPrefix = "\u{E000}"
     private static let tokenSuffix = "\u{E001}"
 
     static func render(_ source: String) -> String {
         var tokens: [String] = []
-        var text = protectEscapes(in: source, tokens: &tokens)
+        let tokenPrefix = "\u{E000}\(UUID().uuidString)\u{E001}"
+        var text = protectEscapes(in: source, tokenPrefix: tokenPrefix, tokens: &tokens)
 
         text = text.replacingMatches(pattern: #"`([^`\n]+)`"#) { groups in
-            token("<code>\(escapeHTML(groups[1]))</code>", tokens: &tokens)
+            token("<code>\(escapeHTML(groups[1]))</code>", prefix: tokenPrefix, tokens: &tokens)
         }
 
-        text = text.replacingMatches(pattern: #"!\[([^\]]*)\]\(([^\s\)]+)(?:\s+["'][^"']*["'])?\)"#) { groups in
-            token("<span class=\"image-alt\">\(escapeHTML(groups[1]))</span>", tokens: &tokens)
+        text = text.replacingMatches(pattern: #"!\[([^\]]*)\]\(\s*((?:[^\s()]|\([^\s()]*\))+)(?:\s+["'][^"']*["'])?\s*\)"#) { groups in
+            let alt = escapeHTML(groups[1])
+            guard let url = safeImageURL(groups[2]) else {
+                return token(
+                    "<span class=\"image-alt\">\(alt)</span>",
+                    prefix: tokenPrefix,
+                    tokens: &tokens
+                )
+            }
+            return token(
+                "<img src=\"\(escapeHTML(url))\" alt=\"\(alt)\" loading=\"lazy\">",
+                prefix: tokenPrefix,
+                tokens: &tokens
+            )
         }
 
-        text = text.replacingMatches(pattern: #"\[([^\]]+)\]\(([^\s\)]+)(?:\s+["'][^"']*["'])?\)"#) { groups in
+        text = text.replacingMatches(pattern: #"\[([^\]]+)\]\(\s*((?:[^\s()]|\([^\s()]*\))+)(?:\s+["'][^"']*["'])?\s*\)"#) { groups in
             let label = escapeHTML(groups[1])
             guard let url = safeURL(groups[2]) else {
-                return token(label, tokens: &tokens)
+                return token(label, prefix: tokenPrefix, tokens: &tokens)
             }
             return token(
                 "<a href=\"\(escapeHTML(url))\" rel=\"noreferrer noopener\">\(label)</a>",
+                prefix: tokenPrefix,
+                tokens: &tokens
+            )
+        }
+
+        text = text.replacingMatches(pattern: #"(https?://[^\s<>\)\]]+)"#) { groups in
+            let url = escapeHTML(groups[1])
+            return token(
+                "<a href=\"\(url)\" rel=\"noreferrer noopener\">\(url)</a>",
+                prefix: tokenPrefix,
                 tokens: &tokens
             )
         }
@@ -633,13 +698,17 @@ nonisolated private enum InlineMarkdown {
         text = text.replacingMatches(pattern: #"(?<!\*)\*([^*\n]+)\*(?!\*)"#) { "<em>\($0[1])</em>" }
         text = text.replacingMatches(pattern: #"(?<!\w)_([^_\n]+)_(?!\w)"#) { "<em>\($0[1])</em>" }
 
-        text = text.replacingMatches(
-            pattern: "\(tokenPrefix)(\\d+)\(tokenSuffix)"
-        ) { groups in
-            guard let index = Int(groups[1]), tokens.indices.contains(index) else {
-                return groups[0]
+        var restorePasses = 0
+        while text.contains(tokenPrefix), restorePasses < 5 {
+            text = text.replacingMatches(
+                pattern: "\(NSRegularExpression.escapedPattern(for: tokenPrefix))(\\d+)\(tokenSuffix)"
+            ) { groups in
+                guard let index = Int(groups[1]), tokens.indices.contains(index) else {
+                    return groups[0]
+                }
+                return tokens[index]
             }
-            return tokens[index]
+            restorePasses += 1
         }
         return text
     }
@@ -653,7 +722,11 @@ nonisolated private enum InlineMarkdown {
             .replacingOccurrences(of: "'", with: "&#39;")
     }
 
-    private static func protectEscapes(in source: String, tokens: inout [String]) -> String {
+    private static func protectEscapes(
+        in source: String,
+        tokenPrefix: String,
+        tokens: inout [String]
+    ) -> String {
         let escapable = #"\\`*{}[]()#+-.!_|>~"#
         var result = ""
         var index = source.startIndex
@@ -662,7 +735,11 @@ nonisolated private enum InlineMarkdown {
             let character = source[index]
             let next = source.index(after: index)
             if character == "\\", next < source.endIndex, escapable.contains(source[next]) {
-                result += token(escapeHTML(String(source[next])), tokens: &tokens)
+                result += token(
+                    escapeHTML(String(source[next])),
+                    prefix: tokenPrefix,
+                    tokens: &tokens
+                )
                 index = source.index(after: next)
             } else {
                 result.append(character)
@@ -674,21 +751,33 @@ nonisolated private enum InlineMarkdown {
 
     private static func safeURL(_ string: String) -> String? {
         let decoded = string.removingPercentEncoding ?? string
+        guard let components = URLComponents(string: decoded) else { return nil }
+        guard let scheme = components.scheme?.lowercased() else {
+            return string.hasPrefix("#") ? string : nil
+        }
+        return ["http", "https", "mailto"].contains(scheme) ? string : nil
+    }
+
+    private static func safeImageURL(_ string: String) -> String? {
+        let decoded = string.removingPercentEncoding ?? string
         guard let components = URLComponents(string: decoded),
-              let scheme = components.scheme?.lowercased(),
-              ["http", "https", "mailto"].contains(scheme) else {
+              components.scheme?.lowercased() == "https" else {
             return nil
         }
         return string
     }
 
-    private static func token(_ html: String, tokens: inout [String]) -> String {
+    private static func token(
+        _ html: String,
+        prefix: String,
+        tokens: inout [String]
+    ) -> String {
         tokens.append(html)
-        return tokenKey(tokens.count - 1)
+        return tokenKey(tokens.count - 1, prefix: prefix)
     }
 
-    private static func tokenKey(_ index: Int) -> String {
-        "\(tokenPrefix)\(index)\(tokenSuffix)"
+    private static func tokenKey(_ index: Int, prefix: String) -> String {
+        "\(prefix)\(index)\(tokenSuffix)"
     }
 }
 

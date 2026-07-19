@@ -7,10 +7,16 @@ nonisolated enum MarkdownAppearance: String, Sendable {
     case dark
 }
 
+enum PreviewContent: Sendable {
+    case loaded(String)
+    case failed(String)
+}
+
 struct PreviewDocument: Sendable {
     let fileURL: URL
-    let markdown: String?
-    let readError: String?
+    let content: PreviewContent
+
+    nonisolated private static let maximumFileSize = 20 * 1024 * 1024 // 20 MB
 
     nonisolated static func load(from url: URL) -> PreviewDocument {
         let accessed = url.startAccessingSecurityScopedResource()
@@ -21,30 +27,35 @@ struct PreviewDocument: Sendable {
         }
 
         do {
+            let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            guard size <= maximumFileSize else {
+                throw CocoaError(.fileReadTooLarge)
+            }
+
             let data = try Data(contentsOf: url, options: .mappedIfSafe)
-            let encodings: [String.Encoding] = [
-                .utf8,
-                .utf16,
-                .utf16LittleEndian,
-                .utf16BigEndian,
-                .isoLatin1
-            ]
+            let gb18030 = String.Encoding(
+                rawValue: CFStringConvertEncodingToNSStringEncoding(
+                    CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)
+                )
+            )
+            // UTF-16 decodes almost any even-length byte stream into garbage, so
+            // only attempt it when a real byte-order mark says so — otherwise a
+            // GB18030/Latin-1 file gets mojibake'd before the byte-oriented
+            // encodings below ever get a turn.
+            var encodings: [String.Encoding] = [.utf8]
+            let bom = Array(data.prefix(2))
+            if bom == [0xFF, 0xFE] || bom == [0xFE, 0xFF] {
+                encodings.append(.utf16)
+            }
+            encodings.append(contentsOf: [gb18030, .isoLatin1])
             for encoding in encodings {
                 if let string = String(data: data, encoding: encoding) {
-                    return PreviewDocument(
-                        fileURL: url,
-                        markdown: string,
-                        readError: nil
-                    )
+                    return PreviewDocument(fileURL: url, content: .loaded(string))
                 }
             }
             throw CocoaError(.fileReadInapplicableStringEncoding)
         } catch {
-            return PreviewDocument(
-                fileURL: url,
-                markdown: nil,
-                readError: error.localizedDescription
-            )
+            return PreviewDocument(fileURL: url, content: .failed(error.localizedDescription))
         }
     }
 }
@@ -83,9 +94,23 @@ final class MarkdownWebKitRuntime {
         configuration.suppressesIncrementalRendering = false
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.setValue(false, forKey: "drawsBackground")
+        webView.underPageBackgroundColor = .clear
         webView.allowsMagnification = true
         return webView
+    }
+}
+
+extension WKWebView {
+    @objc func zoomIn(_ sender: Any?) {
+        pageZoom = min(pageZoom + 0.1, 3.0)
+    }
+
+    @objc func zoomOut(_ sender: Any?) {
+        pageZoom = max(pageZoom - 0.1, 0.5)
+    }
+
+    @objc func resetZoom(_ sender: Any?) {
+        pageZoom = 1.0
     }
 }
 
@@ -104,17 +129,15 @@ struct MarkdownWebView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        let signature = "\(document.fileURL.path)|\(appearance.rawValue)"
-        guard context.coordinator.signature != signature else { return }
-        context.coordinator.signature = signature
-
-        context.coordinator.render(
-            markdown: document.markdown,
-            readError: document.readError,
-            appearance: appearance,
-            signature: signature,
-            in: webView
-        )
+        let coordinator = context.coordinator
+        if coordinator.documentPath != document.fileURL.path {
+            coordinator.documentPath = document.fileURL.path
+            coordinator.appearance = appearance
+            coordinator.render(content: document.content, appearance: appearance, in: webView)
+        } else if coordinator.appearance != appearance {
+            coordinator.appearance = appearance
+            coordinator.render(content: document.content, appearance: appearance, in: webView)
+        }
     }
 
     static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
@@ -124,27 +147,24 @@ struct MarkdownWebView: NSViewRepresentable {
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
-        var signature: String?
+        var documentPath: String?
+        var appearance: MarkdownAppearance?
         private var renderGeneration = 0
 
-        func render(
-            markdown: String?,
-            readError: String?,
-            appearance: MarkdownAppearance,
-            signature: String,
-            in webView: WKWebView
-        ) {
+        func render(content: PreviewContent, appearance: MarkdownAppearance, in webView: WKWebView) {
             renderGeneration += 1
             let generation = renderGeneration
+            let path = documentPath
 
             DispatchQueue.global(qos: .userInitiated).async {
                 let html: String
-                if let markdown {
+                switch content {
+                case .loaded(let markdown):
                     html = MarkdownDocumentRenderer.render(markdown, appearance: appearance)
-                } else {
+                case .failed(let message):
                     html = MarkdownDocumentRenderer.renderError(
                         title: "Unable to Open File",
-                        message: readError ?? "The file could not be read.",
+                        message: message,
                         appearance: appearance
                     )
                 }
@@ -152,7 +172,7 @@ struct MarkdownWebView: NSViewRepresentable {
                 DispatchQueue.main.async { [weak self, weak webView] in
                     guard let self,
                           self.renderGeneration == generation,
-                          self.signature == signature else {
+                          self.documentPath == path else {
                         return
                     }
                     webView?.loadHTMLString(html, baseURL: Bundle.main.resourceURL)
@@ -162,7 +182,7 @@ struct MarkdownWebView: NSViewRepresentable {
 
         func invalidate() {
             renderGeneration += 1
-            signature = nil
+            documentPath = nil
         }
 
         func webView(
@@ -178,8 +198,24 @@ struct MarkdownWebView: NSViewRepresentable {
 
             if ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") {
                 NSWorkspace.shared.open(url)
+                decisionHandler(.cancel)
+                return
             }
+
+            if let currentURL = webView.url, isSamePage(url, currentURL) {
+                decisionHandler(.allow) // in-page anchor jump
+                return
+            }
+
             decisionHandler(.cancel)
+        }
+
+        private func isSamePage(_ a: URL, _ b: URL) -> Bool {
+            var aComponents = URLComponents(url: a, resolvingAgainstBaseURL: true)
+            var bComponents = URLComponents(url: b, resolvingAgainstBaseURL: true)
+            aComponents?.fragment = nil
+            bComponents?.fragment = nil
+            return aComponents?.url == bComponents?.url
         }
     }
 }

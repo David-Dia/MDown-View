@@ -2,10 +2,13 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+let markdownExtensions: Set<String> = ["md", "markdown"]
+
 @main
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let windowManager = PreviewWindowManager()
+    private let isVisualTest = CommandLine.arguments.contains("--visual-test")
 
     static func main() {
         let application = NSApplication.shared
@@ -13,7 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         application.setActivationPolicy(visualTest ? .regular : .accessory)
         let delegate = AppDelegate()
         application.delegate = delegate
-        application.run()
+        withExtendedLifetime(delegate) {
+            application.run()
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -22,17 +27,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let commandLineURLs = CommandLine.arguments.dropFirst().compactMap { argument -> URL? in
             let url = URL(fileURLWithPath: argument)
-            return ["md", "markdown"].contains(url.pathExtension.lowercased()) ? url : nil
+            return markdownExtensions.contains(url.pathExtension.lowercased()) ? url : nil
         }
         if !commandLineURLs.isEmpty {
             open(urls: commandLineURLs)
         }
-    }
 
-    func application(_ sender: NSApplication, openFiles filenames: [String]) {
-        let urls = filenames.map(URL.init(fileURLWithPath:))
-        open(urls: urls)
-        sender.reply(toOpenOrPrint: .success)
+        // Launched with no document to show (e.g. double-clicking the app icon
+        // itself). As a background accessory app there's nothing to display,
+        // so quit instead of sitting invisibly with no way to recover it.
+        guard !isVisualTest else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self else { return }
+            if NSApplication.shared.windows.isEmpty && windowManager.pendingOpenCount == 0 {
+                NSApplication.shared.terminate(nil)
+            }
+        }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -40,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        windowManager.pendingOpenCount == 0
     }
 
     @objc private func openDocument(_ sender: Any?) {
@@ -50,10 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = true
-        panel.allowedContentTypes = [
-            UTType(filenameExtension: "md"),
-            UTType(filenameExtension: "markdown")
-        ].compactMap { $0 }
+        panel.allowedContentTypes = markdownExtensions.compactMap { UTType(filenameExtension: $0) }
 
         guard panel.runModal() == .OK else { return }
         open(urls: panel.urls)
@@ -65,7 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func open(urls: [URL]) {
         let markdownURLs = urls.filter {
-            ["md", "markdown"].contains($0.pathExtension.lowercased())
+            markdownExtensions.contains($0.pathExtension.lowercased())
         }
         guard !markdownURLs.isEmpty else { return }
 
@@ -106,10 +113,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let editItem = NSMenuItem()
         let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(NSMenuItem.separator())
         editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = editMenu
         mainMenu.addItem(editItem)
+
+        let viewItem = NSMenuItem()
+        let viewMenu = NSMenu(title: "View")
+        viewMenu.addItem(withTitle: "Zoom In", action: Selector(("zoomIn:")), keyEquivalent: "+")
+        viewMenu.addItem(withTitle: "Zoom Out", action: Selector(("zoomOut:")), keyEquivalent: "-")
+        viewMenu.addItem(withTitle: "Actual Size", action: Selector(("resetZoom:")), keyEquivalent: "0")
+        viewItem.submenu = viewMenu
+        mainMenu.addItem(viewItem)
+
+        let windowItem = NSMenuItem()
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(
+            withTitle: "Minimize",
+            action: #selector(NSWindow.performMiniaturize(_:)),
+            keyEquivalent: "m"
+        )
+        windowMenu.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        windowMenu.addItem(NSMenuItem.separator())
+        windowMenu.addItem(
+            withTitle: "Bring All to Front",
+            action: #selector(NSApplication.arrangeInFront(_:)),
+            keyEquivalent: ""
+        )
+        windowItem.submenu = windowMenu
+        mainMenu.addItem(windowItem)
+        NSApplication.shared.windowsMenu = windowMenu
 
         NSApplication.shared.mainMenu = mainMenu
     }
@@ -117,8 +155,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 @MainActor
 private final class PreviewWindowManager {
-    private var controllers: [UUID: PreviewWindowController] = [:]
-    private var recentOpenRequests: [String: Date] = [:]
+    private var controllers: [String: PreviewWindowController] = [:]
+    private var pendingKeys: Set<String> = []
+    private(set) var pendingOpenCount = 0
     private var cascadeIndex = 0
 
     private let cascadeOffsets: [NSPoint] = [
@@ -136,51 +175,52 @@ private final class PreviewWindowManager {
     ]
 
     func open(urls: [URL]) {
-        let now = Date()
-        recentOpenRequests = recentOpenRequests.filter {
-            now.timeIntervalSince($0.value) < 2
-        }
-        let uniqueURLs = urls.filter { url in
-            let key = url.standardizedFileURL.path
-            guard recentOpenRequests[key] == nil else { return false }
-            recentOpenRequests[key] = now
-            return true
-        }
+        var keysInThisBatch: Set<String> = []
+        let uniqueURLs = urls.filter { keysInThisBatch.insert($0.standardizedFileURL.path).inserted }
         guard !uniqueURLs.isEmpty else { return }
         MarkdownWebKitRuntime.shared.prewarm()
 
-        Task { [weak self] in
-            let documents = await Task.detached(priority: .userInitiated) {
-                uniqueURLs.map(PreviewDocument.load(from:))
-            }.value
-            guard let self else { return }
+        for url in uniqueURLs {
+            let key = url.standardizedFileURL.path
 
-            for document in documents {
-                present(document)
+            if let existing = controllers[key] {
+                existing.window?.makeKeyAndOrderFront(nil)
+                continue
+            }
+            guard !pendingKeys.contains(key) else { continue }
+            pendingKeys.insert(key)
+            pendingOpenCount += 1
+
+            Task { [weak self] in
+                let document = await Task.detached(priority: .userInitiated) {
+                    PreviewDocument.load(from: url)
+                }.value
+                guard let self else { return }
+                pendingKeys.remove(key)
+                pendingOpenCount -= 1
+                present(document, key: key)
             }
         }
     }
 
-    private func present(_ document: PreviewDocument) {
-        let id = UUID()
+    private func present(_ document: PreviewDocument, key: String) {
         let screen = NSApplication.shared.keyWindow?.screen ?? NSScreen.main
         let controller = PreviewWindowController(
             document: document,
             screen: screen,
-            onClose: { [weak self] in self?.controllers[id] = nil }
+            onClose: { [weak self] in self?.controllers[key] = nil }
         )
-        position(controller.window, on: screen)
-        controllers[id] = controller
+        if !controller.restoredSavedFrame {
+            position(controller.window, on: screen)
+        }
+        controllers[key] = controller
         controller.showWindow(nil)
-        controller.window?.makeKeyAndOrderFront(nil)
     }
 
     private func position(_ window: NSWindow?, on screen: NSScreen?) {
         guard let window else { return }
 
-        let visibleFrame = screen?.visibleFrame
-            ?? NSScreen.main?.visibleFrame
-            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let visibleFrame = Self.visibleFrame(for: screen)
         let centeredOrigin = NSPoint(
             x: visibleFrame.midX - window.frame.width / 2,
             y: visibleFrame.midY - window.frame.height / 2
@@ -194,7 +234,7 @@ private final class PreviewWindowManager {
                 x: centeredOrigin.x + offset.x,
                 y: centeredOrigin.y + offset.y
             )
-            let origin = constrainedOrigin(
+            let origin = Self.constrainedOrigin(
                 proposedOrigin,
                 windowSize: window.frame.size,
                 visibleFrame: visibleFrame
@@ -210,15 +250,17 @@ private final class PreviewWindowManager {
         }
 
         window.setFrameOrigin(
-            constrainedOrigin(
-                centeredOrigin,
-                windowSize: window.frame.size,
-                visibleFrame: visibleFrame
-            )
+            Self.constrainedOrigin(centeredOrigin, windowSize: window.frame.size, visibleFrame: visibleFrame)
         )
     }
 
-    private func constrainedOrigin(
+    static func visibleFrame(for screen: NSScreen?) -> NSRect {
+        screen?.visibleFrame
+            ?? NSScreen.main?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 1_440, height: 900)
+    }
+
+    private static func constrainedOrigin(
         _ origin: NSPoint,
         windowSize: NSSize,
         visibleFrame: NSRect
@@ -232,10 +274,11 @@ private final class PreviewWindowManager {
 
 @MainActor
 private final class PreviewWindowController: NSWindowController, NSWindowDelegate {
-    private static let referenceContentSize = NSSize(width: 768, height: 1_072)
+    private static let referenceContentSize = NSSize(width: 900, height: 1_040)
     private static let totalScreenMargin: CGFloat = 80
 
     private let onClose: () -> Void
+    let restoredSavedFrame: Bool
 
     init(document: PreviewDocument, screen: NSScreen?, onClose: @escaping () -> Void) {
         self.onClose = onClose
@@ -266,16 +309,21 @@ private final class PreviewWindowController: NSWindowController, NSWindowDelegat
         themeView.frame = NSRect(x: 0, y: 0, width: 174, height: 30)
         accessory.view = themeView
         window.addTitlebarAccessoryViewController(accessory)
+
+        // Size the window LAST: setting an NSHostingController as the content
+        // view controller resizes the window down to the SwiftUI view's fitting
+        // size, so any sizing done before this gets clobbered.
         window.setContentSize(contentSize)
+        let autosaveName = "Preview-" + document.fileURL.standardizedFileURL.path
+        restoredSavedFrame = window.setFrameUsingName(autosaveName)
+        window.setFrameAutosaveName(autosaveName)
 
         super.init(window: window)
         window.delegate = self
     }
 
     private static func defaultContentSize(for screen: NSScreen?) -> NSSize {
-        let visibleFrame = screen?.visibleFrame
-            ?? NSScreen.main?.visibleFrame
-            ?? NSRect(x: 0, y: 0, width: 1_440, height: 900)
+        let visibleFrame = PreviewWindowManager.visibleFrame(for: screen)
         let availableWidth = max(1, visibleFrame.width - totalScreenMargin)
         let availableHeight = max(1, visibleFrame.height - totalScreenMargin)
         let scale = min(
